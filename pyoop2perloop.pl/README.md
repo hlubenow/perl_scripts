@@ -1,4 +1,4 @@
-#### pyoop2perloop.py
+### pyoop2perloop.py
 
 Perl 5's built-in OOP can be used similar to Python's OOP. Basically, you just have to write more sigils, brackets and so on.
 
@@ -46,8 +46,10 @@ Of course, this doesn't lead to a working Perl-script. A lot of things still hav
 - A semicolon is added to lines that aren't empty, aren't comments and don't end with a comma or a curly bracket.
 - The closing curly brackets of blocks (function-, loop-, condition-blocks) are added (that was the trickiest part to write). 
 
-The script just reads in code from a given filenmae and prints it. Usage is:
-``` pyoop2perloop.py [pythonscript.py] ```
+The script reads in code from a given filenmae and prints the result. Usage is:
+```
+pyoop2perloop.py [pythonscript.py]
+```
 Output can be piped to an output file using bash's `>` operator.
 
 License: GNU GPL 3 (or above)
