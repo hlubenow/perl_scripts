@@ -27,7 +27,7 @@ Of course, this doesn't lead to a working Perl-script. A lot of things still hav
         my $a = shift;
         $self->{a} = shift;
 ```
-    It's not sure, whether "$a" should be a variable inside the function or an attribute of the class, so both lines are added. One has to be deleted manually lateron.
+It's not sure, whether "$a" should be a variable inside the function or an attribute of the class, so both lines are added. One has to be deleted manually lateron.
 
 - `self.myattribute` is changed to `self->{myattribute}`.
 - `def myfunc(a, b):` (a stand-alone function) is changed to:
