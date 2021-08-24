@@ -5,7 +5,7 @@ use strict;
 
 =begin comment
 
-    pyoop2perloop.pl 1.0 - Converts a Python-script to a sketch in Perl,
+    pyoop2perloop.pl 1.1 - Converts a Python-script to a sketch in Perl,
                            that has to be reworked afterwards.
 
     Copyright (C) 2018, 2021 hlubenow
@@ -258,12 +258,27 @@ sub replaceTripleQuotationMarks {
 
 sub createPerlSketchFromPythonScript {
     my @script = @_;
-    my ($i, $u, $a, $line, $linedone, $indent, $condition);
+    my ($i, $u, $a, $line, $indent, $condition, $parline);
+
+    # "$linedone == 0" means, the original line of the Python script gets added to
+    # the result, keeping the original indentation (= $indent).
+    # "$linedone == 1" means, we have completely changed the original Python line, so
+    # we don't need it any more in the result.
+
+    my $linedone;
+
+    my $lookForClosingBracketOfInit = 0;
     my (@a, @content, @parameters);
     my %h;
     my @somekeywords = qw(if elif while);
     my $codingfound = 0;
-    my @p = ("#!/usr/bin/perl", "", "use warnings;", "use strict;");
+
+    # @p is the array of the resulting code text:
+    my @p = ("#!/usr/bin/perl",
+             "",
+             "use warnings;",
+             "use strict;");
+
     # It may seem strange, but first we need to get a version of the
     # Python-script, with closing brackets inserted after the code-blocks.
     @script = getPythonScriptWithClosingBrackets(@script);
@@ -284,6 +299,12 @@ sub createPerlSketchFromPythonScript {
             $linedone = 1;
         }
 
+        if ($lookForClosingBracketOfInit && $line eq "}") {
+            push(@p, " " x ($indent + $ONEINDENTLEVEL) . "return bless(\$self, \$classname);");
+            $linedone = 0;
+            $lookForClosingBracketOfInit = 0;
+        }
+
         $line = replaceSelfs($line);
 
         if (startswith($line, "class ")) {
@@ -296,6 +317,7 @@ sub createPerlSketchFromPythonScript {
         if (startswith($line, "def ")) {
             %h = getParameters($line);
             if ($h{funcname} eq "__init__") {
+                # The "__init__"-function of a class:
                 $h{funcname} = "new";
                 @content = (["sub $h{funcname} {", 0],
                             ["my \$classname = shift;", $ONEINDENTLEVEL],
@@ -304,25 +326,46 @@ sub createPerlSketchFromPythonScript {
                 for $u (@parameters) {
                     push(@content, ["\$self->{$u} = shift;", $ONEINDENTLEVEL]);
                 }
-                push(@content, ["return bless(\$self, \$classname);", $ONEINDENTLEVEL]);
-                push(@content, ["}", 0]);
                 for $u (@content) {
                     my @u_arr = @{ $u };
                     push(@p, " " x ($indent + $u_arr[1]) . $u_arr[0]);
                 }
+
+                # We use "$lookForClosingBracketOfInit" (see above) to add the line
+                # "return bless($self, $classname);" and the closing "}" at the end
+                # of the "new()"-function:
+                $lookForClosingBracketOfInit = 1;
+
             } else {
                 push(@p, " " x $indent . "sub $h{funcname} {");
-                if ($h{self}) {
-                    push(@p, " " x ($indent + $ONEINDENTLEVEL) . "my \$self = shift;");
-                }
                 @parameters = @{ $h{parameters} };
-                for $u (@parameters) {
-                    push(@p, " " x ($indent + $ONEINDENTLEVEL) . "my $u = shift;");
-                    if ($h{self}) {
-                        push(@p, " " x ($indent + $ONEINDENTLEVEL) . "\$self->{$u} = shift;");
+
+                if ( $h{self} && $#parameters == -1) {
+                    # An ordinary function inside a class with "self" as the only parameter:
+                    push(@p, " " x ($indent + $ONEINDENTLEVEL) . "my \$self = shift;");
+
+                } elsif ( $h{self} && $#parameters >= 0) {
+                    # A function in a class with several parameters:
+                    $parline = " " x ($indent + $ONEINDENTLEVEL);
+                    $parline .= "my (\$self, ";
+                    for $u (0 .. $#parameters) {
+                        $parline .= "\$";
+                        $parline .= $parameters[$u];
+                        if ($u < $#parameters) {
+                            $parline .= ", ";
+                        }
                     }
+                    $parline .= ") = \@_;";
+                    push(@p, $parline);
+
+                } else {
+                    # A function outside of a class:
+                    for $u (@parameters) {
+                        push(@p, " " x ($indent + $ONEINDENTLEVEL) . "my \$$u = shift;");
+                    }
+                    # Let's have a "my $i;" in there, just in case:
+                    push(@p, " " x ($indent + $ONEINDENTLEVEL) . "my \$i;");
                 }
-                push(@p, " " x ($indent + $ONEINDENTLEVEL) . "my \$i;");
             }
             $linedone = 1;
         }
@@ -388,6 +431,13 @@ if ($#ARGV < 0) {
 
 my $fname = $ARGV[0];
 chomp($fname);
+
+if ($fname !~ /\.py/) {
+    print "\nError: The filename of a Python-script should end with \".py\", shouldn't it?\n";
+    print "Nothing done.\n\n";
+    exit 2;
+}
+
 my $fh;
 open($fh, "<", $fname) or die $!; 
 my @pythonscript = <$fh>;
